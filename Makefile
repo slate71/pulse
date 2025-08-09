@@ -41,12 +41,12 @@ db-migrate:
 		echo "❌ Error: .env file not found. Copy .env.example to .env and configure your database settings."; \
 		exit 1; \
 	fi
-	@echo "Applying migration: 001_create_events_table.sql"
-	@psql $(DATABASE_URL) -f db/migrations/001_create_events_table.sql
-	@echo "Applying migration: 002_create_metrics_daily_table.sql"
-	@psql $(DATABASE_URL) -f db/migrations/002_create_metrics_daily_table.sql
-	@echo "Applying migration: 003_create_feedback_table.sql"
-	@psql $(DATABASE_URL) -f db/migrations/003_create_feedback_table.sql
+	@echo "Loading environment variables..."
+	@set -a && . ./.env && set +a && \
+	for migration in db/migrations/*.sql; do \
+		echo "Applying migration: $$(basename $$migration)"; \
+		psql $$DATABASE_URL -f "$$migration" || exit 1; \
+	done
 	@echo "✅ Database migrations complete!"
 
 # Check if database is accessible
