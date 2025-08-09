@@ -1,0 +1,16 @@
+Title,Description,Labels,Status
+Define scope & repo,"Create repo with api/, web/, db/. Add README skeleton, .env.example, Makefile.",infra,Todo
+DB schema & migrations,"Create tables: events, metrics_daily, feedback. Migration runs locally; psql introspection matches spec.",infra,Todo
+GitHub ingest,"Poll events + PRs via API; normalize to events; idempotent hash. POST /ingest/run stores ≥1 real event.",ingest,Todo
+Linear ingest,"Fetch issues + states since cursor; normalize; dedupe. Linear events appear in events with correct types.",ingest,Todo
+Metrics compute,"48h KPIs; review latency; blocked count. Pure function + unit tests (golden fixtures).",metrics,Todo
+LLM contract & validator,"System prompt; JSON schema; retry-on-invalid. Returns valid JSON citing concrete events.",ai,Todo
+/analyze endpoint,"Compose metrics + last 48h events → LLM → store feedback. Returns {metrics, feedback} <2s local.",api,Todo
+Public report endpoint,"Read-only {metrics, feedback, recent_events(50)}. No secrets; 429 if >5 req/min.",api,Todo
+Web UI shell,"Next/TanStack app; layout; fonts; icons. Lighthouse ≥90 perf on localhost.",web,Todo
+Header KPIs,"Render four KPIs from /report/public. Numbers match API; empty-state ok.",web,Todo
+Event stream,"48h events grouped by hour; source/type badges; links. Renders 100 events smoothly.",web,Todo
+AI Today Focus panel,"Show 3 actions + risks with evidence links. Evidence anchors jump to event in stream.",web,Todo
+Deploy (API + Web),"Hosted API + Web; public report wired. Health checks pass; cold start <1s.",infra,Todo
+Seed & demo,"Seed script for mock events; toggle real/seed. Demo works without tokens.",infra,Todo
+Docs & posts,"README (arch diagram, env vars, run cmds). Site post + LinkedIn copy; screenshots added.",docs,Todo
