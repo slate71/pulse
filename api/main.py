@@ -1,10 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import os
 from dotenv import load_dotenv
 from db import health_check
+from github_ingest import ingest_github_events
 
 load_dotenv()
 
@@ -32,6 +33,21 @@ class HealthResponse(BaseModel):
 class IngestRequest(BaseModel):
     source: str
     events: List[Dict[str, Any]]
+
+
+class GitHubIngestConfig(BaseModel):
+    owner: str
+    repo: str
+    since_iso: Optional[str] = None
+
+
+class IngestRunRequest(BaseModel):
+    github: Optional[GitHubIngestConfig] = None
+
+
+class IngestRunResponse(BaseModel):
+    inserted: int
+    skipped: int
 
 
 class AnalyzeResponse(BaseModel):
@@ -64,6 +80,35 @@ async def ingest_data(request: IngestRequest):
     # - Store events in database
     # - Queue for analysis if needed
     return {"message": f"Ingested {len(request.events)} events from {request.source}"}
+
+
+@app.post("/ingest/run", response_model=IngestRunResponse)
+async def run_ingest(request: IngestRunRequest):
+    """
+    Run data ingestion from configured sources.
+    
+    Currently supports:
+    - GitHub: Fetch events from a repository
+    """
+    if not request.github:
+        raise HTTPException(status_code=400, detail="No ingest sources specified")
+    
+    try:
+        result = await ingest_github_events(
+            owner=request.github.owner,
+            repo=request.github.repo,
+            since_iso=request.github.since_iso
+        )
+        
+        return IngestRunResponse(
+            inserted=result["inserted"],
+            skipped=result["skipped"]
+        )
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ingest failed: {str(e)}")
 
 
 @app.get("/analyze", response_model=AnalyzeResponse)
