@@ -4,8 +4,9 @@ from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import os
 from dotenv import load_dotenv
-from db import health_check
+from db import health_check, fetch
 from github_ingest import ingest_github_events
+from metrics import compute_48h_metrics, filter_recent_events
 
 load_dotenv()
 
@@ -52,7 +53,7 @@ class IngestRunResponse(BaseModel):
 
 class AnalyzeResponse(BaseModel):
     metrics: Dict[str, Any]
-    insights: List[str]
+    events: List[Dict[str, Any]]
 
 
 class ReportResponse(BaseModel):
@@ -111,16 +112,53 @@ async def run_ingest(request: IngestRunRequest):
         raise HTTPException(status_code=500, detail=f"Ingest failed: {str(e)}")
 
 
-@app.get("/analyze", response_model=AnalyzeResponse)
+@app.post("/analyze", response_model=AnalyzeResponse)
 async def analyze_metrics():
-    # TODO: Implement metric computation and analysis
-    # - Query recent events from database
-    # - Compute execution metrics (velocity, cycle time, etc.)
-    # - Generate insights from patterns
-    return AnalyzeResponse(
-        metrics={"placeholder": "implementation_needed"},
-        insights=["TODO: Implement metric analysis"]
-    )
+    """
+    Analyze metrics from recent events.
+    
+    Queries events from the last 48 hours, computes engineering metrics,
+    and returns metrics along with the 50 most recent events.
+    """
+    try:
+        # Query last 48 hours of events from database
+        sql = """
+            SELECT * FROM events 
+            WHERE ts >= NOW() - INTERVAL '48 hours'
+            ORDER BY ts DESC
+        """
+        events = await fetch(sql)
+        
+        # Convert database rows to list of dicts and handle datetime objects
+        converted_events = []
+        for event in events:
+            if hasattr(event, 'keys'):
+                # Convert asyncpg Record to dict
+                event_dict = dict(event)
+            else:
+                event_dict = event
+                
+            # Convert datetime objects to ISO strings for JSON serialization
+            if 'ts' in event_dict and hasattr(event_dict['ts'], 'isoformat'):
+                event_dict['ts'] = event_dict['ts'].isoformat()
+                
+            converted_events.append(event_dict)
+        
+        events = converted_events
+        
+        # Compute 48h metrics
+        metrics = compute_48h_metrics(events)
+        
+        # Get 50 most recent events
+        recent_events = filter_recent_events(events, limit=50)
+        
+        return AnalyzeResponse(
+            metrics=metrics,
+            events=recent_events
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 
 @app.get("/report", response_model=ReportResponse)
