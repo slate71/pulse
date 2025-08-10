@@ -26,11 +26,11 @@ async def fetch_github_events(owner: str, repo: str, since_iso: str | None = Non
     
     Raises:
         httpx.RequestError: If the GitHub API request fails
-        ValueError: If GH_TOKEN is not set
+        ValueError: If GITHUB_TOKEN is not set
     """
-    gh_token = os.getenv("GH_TOKEN")
+    gh_token = os.getenv("GITHUB_TOKEN")
     if not gh_token:
-        raise ValueError("GH_TOKEN environment variable is required")
+        raise ValueError("GITHUB_TOKEN environment variable is required")
     
     url = f"https://api.github.com/repos/{owner}/{repo}/events"
     headers = {
