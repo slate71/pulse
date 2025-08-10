@@ -95,9 +95,17 @@ def compute_48h_metrics(events: List[Dict]) -> Dict:
                     metrics["prs_merged_48h"] += 1
                     
         elif source == 'linear':
-            # TODO: Implement Linear ticket metrics when we have Linear events
-            # For now, these remain at 0
-            pass
+            # Handle Linear events for ticket metrics
+            if event_type == 'ISSUE_CREATED':
+                # Count as tickets moved (new ticket is movement)
+                metrics["tickets_moved_48h"] += 1
+            elif event_type == 'ISSUE_STATE_CHANGED':
+                # Count state changes as ticket movement
+                metrics["tickets_moved_48h"] += 1
+            elif event_type == 'ISSUE_BLOCKED':
+                # Count currently blocked tickets
+                metrics["tickets_blocked_now"] += 1
+            # Note: ISSUE_UNBLOCKED would decrement, but we're not tracking that reliably yet
     
     return metrics
 
