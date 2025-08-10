@@ -27,6 +27,7 @@ install-web:
 # Start FastAPI development server
 dev-api:
 	@echo "🚀 Starting FastAPI development server..."
+	@echo "📊 Public report available at http://localhost:8000/report/public"
 	cd api && python main.py
 
 # Start Next.js development server
