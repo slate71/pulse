@@ -1,9 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any
 import os
 from dotenv import load_dotenv
+from db import health_check
 
 load_dotenv()
 
@@ -25,6 +26,7 @@ app.add_middleware(
 class HealthResponse(BaseModel):
     status: str
     version: str
+    database: Dict[str, Any]
 
 
 class IngestRequest(BaseModel):
@@ -44,8 +46,15 @@ class ReportResponse(BaseModel):
 
 
 @app.get("/health", response_model=HealthResponse)
-async def health_check():
-    return HealthResponse(status="healthy", version="1.0.0")
+async def health_check_endpoint():
+    # Check database connectivity
+    db_status = await health_check()
+
+    return HealthResponse(
+        status="healthy" if db_status["status"] == "healthy" else "degraded",
+        version="1.0.0",
+        database=db_status
+    )
 
 
 @app.post("/ingest")
@@ -84,8 +93,8 @@ async def generate_report():
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     host = os.getenv("API_HOST", "localhost")
     port = int(os.getenv("API_PORT", 8000))
-    
+
     uvicorn.run(app, host=host, port=port, reload=True)

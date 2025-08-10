@@ -1,0 +1,23 @@
+{
+  "venvPath": "api",
+  "venv": "venv",
+  "executionEnvironments": [
+    {
+      "root": "api",
+      "pythonVersion": "3.12",
+      "pythonPlatform": "Darwin",
+      "extraPaths": []
+    }
+  ],
+  "typeCheckingMode": "basic",
+  "useLibraryCodeForTypes": true,
+  "autoImportCompletions": true,
+  "include": [
+    "api"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "api/venv"
+  ]
+}
