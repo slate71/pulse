@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 from db import health_check, fetch
 from github_ingest import ingest_github_events
+from linear_ingest import ingest_linear
 from metrics import compute_48h_metrics, filter_recent_events
 
 load_dotenv()
@@ -44,11 +45,16 @@ class GitHubIngestConfig(BaseModel):
 
 class IngestRunRequest(BaseModel):
     github: Optional[GitHubIngestConfig] = None
+    linear: Optional[bool] = None
 
 
 class IngestRunResponse(BaseModel):
     inserted: int
     skipped: int
+    cursor: Optional[str] = None
+    issues_processed: Optional[int] = None
+    events_generated: Optional[int] = None
+    sample: Optional[List[Dict[str, Any]]] = None
 
 
 class AnalyzeResponse(BaseModel):
@@ -84,27 +90,62 @@ async def ingest_data(request: IngestRequest):
 
 
 @app.post("/ingest/run", response_model=IngestRunResponse)
-async def run_ingest(request: IngestRunRequest):
+async def run_ingest(request: IngestRunRequest, dryRun: bool = False):
     """
     Run data ingestion from configured sources.
     
     Currently supports:
     - GitHub: Fetch events from a repository
+    - Linear: Fetch issues from a team
     """
-    if not request.github:
+    if not request.github and not request.linear:
         raise HTTPException(status_code=400, detail="No ingest sources specified")
     
     try:
-        result = await ingest_github_events(
-            owner=request.github.owner,
-            repo=request.github.repo,
-            since_iso=request.github.since_iso
-        )
+        # Handle GitHub ingestion
+        if request.github:
+            result = await ingest_github_events(
+                owner=request.github.owner,
+                repo=request.github.repo,
+                since_iso=request.github.since_iso
+            )
+            
+            return IngestRunResponse(
+                inserted=result["inserted"],
+                skipped=result["skipped"]
+            )
         
-        return IngestRunResponse(
-            inserted=result["inserted"],
-            skipped=result["skipped"]
-        )
+        # Handle Linear ingestion
+        if request.linear:
+            linear_api_key = os.getenv("LINEAR_API_KEY")
+            linear_team_id = os.getenv("LINEAR_TEAM_ID")
+            
+            if not linear_api_key:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="LINEAR_API_KEY environment variable is required"
+                )
+            
+            if not linear_team_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="LINEAR_TEAM_ID environment variable is required"
+                )
+            
+            result = await ingest_linear(
+                team_id=linear_team_id,
+                api_key=linear_api_key,
+                dry_run=dryRun
+            )
+            
+            return IngestRunResponse(
+                inserted=result["inserted"],
+                skipped=result["skipped"],
+                cursor=result.get("cursor"),
+                issues_processed=result.get("issues_processed"),
+                events_generated=result.get("events_generated"),
+                sample=result.get("sample")
+            )
         
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
