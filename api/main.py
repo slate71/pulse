@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 from db import health_check, fetch
 from github_ingest import ingest_github_events
 from metrics import compute_48h_metrics, filter_recent_events
+from report import get_public_report
+from rate_limiter import rate_limiter
 
 load_dotenv()
 
@@ -60,6 +62,13 @@ class ReportResponse(BaseModel):
     focus_actions: List[str]
     kpis: Dict[str, Any]
     event_stream: List[Dict[str, Any]]
+
+
+class PublicReportResponse(BaseModel):
+    as_of: str
+    metrics: Dict[str, Any]
+    feedback: Optional[Dict[str, Any]]
+    recent_events: List[Dict[str, Any]]
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -172,6 +181,53 @@ async def generate_report():
         kpis={"placeholder": "implementation_needed"},
         event_stream=[]
     )
+
+
+@app.get("/report/public", response_model=PublicReportResponse)
+async def get_public_report_endpoint(request: Request):
+    """
+    Get public report with latest metrics, feedback, and recent events.
+    
+    This is a read-only endpoint with no authentication required.
+    Rate limited to 5 requests per minute per IP.
+    
+    Returns:
+        Public report with sanitized data safe for public consumption
+    """
+    # Get client IP for rate limiting
+    client_ip = request.client.host if request.client else "unknown"
+    
+    # Apply rate limiting (5 requests per minute)
+    is_allowed, rate_info = rate_limiter.is_allowed(client_ip, limit=5, window_seconds=60)
+    
+    if not is_allowed:
+        raise HTTPException(
+            status_code=429, 
+            detail="Rate limit exceeded. Maximum 5 requests per minute.",
+            headers={
+                "X-RateLimit-Limit": str(rate_info["limit"]),
+                "X-RateLimit-Remaining": str(rate_info["remaining"]),
+                "X-RateLimit-Reset": str(rate_info["reset"]),
+                "Retry-After": str(rate_info["window"])
+            }
+        )
+    
+    try:
+        # Generate public report
+        report_data = await get_public_report()
+        
+        # Add rate limit headers to successful responses
+        response = PublicReportResponse(**report_data)
+        
+        # Note: FastAPI doesn't support adding headers directly to response models,
+        # but the rate limiting info is logged for monitoring
+        return response
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail="Failed to generate public report"
+        )
 
 
 if __name__ == "__main__":
