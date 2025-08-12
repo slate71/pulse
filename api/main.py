@@ -102,14 +102,14 @@ async def ingest_data(request: IngestRequest):
 async def run_ingest(request: IngestRunRequest, dryRun: bool = False):
     """
     Run data ingestion from configured sources.
-    
+
     Currently supports:
     - GitHub: Fetch events from a repository
     - Linear: Fetch issues from a team
     """
     if not request.github and not request.linear:
         raise HTTPException(status_code=400, detail="No ingest sources specified")
-    
+
     try:
         # Handle GitHub ingestion
         if request.github:
@@ -118,35 +118,35 @@ async def run_ingest(request: IngestRunRequest, dryRun: bool = False):
                 repo=request.github.repo,
                 since_iso=request.github.since_iso
             )
-            
+
             return IngestRunResponse(
                 inserted=result["inserted"],
                 skipped=result["skipped"]
             )
-        
+
         # Handle Linear ingestion
         if request.linear:
             linear_api_key = os.getenv("LINEAR_API_KEY")
             linear_team_id = os.getenv("LINEAR_TEAM_ID")
-            
+
             if not linear_api_key:
                 raise HTTPException(
-                    status_code=400, 
+                    status_code=400,
                     detail="LINEAR_API_KEY environment variable is required"
                 )
-            
+
             if not linear_team_id:
                 raise HTTPException(
                     status_code=400,
                     detail="LINEAR_TEAM_ID environment variable is required"
                 )
-            
+
             result = await ingest_linear(
                 team_id=linear_team_id,
                 api_key=linear_api_key,
                 dry_run=dryRun
             )
-            
+
             return IngestRunResponse(
                 inserted=result["inserted"],
                 skipped=result["skipped"],
@@ -155,7 +155,7 @@ async def run_ingest(request: IngestRunRequest, dryRun: bool = False):
                 events_generated=result.get("events_generated"),
                 sample=result.get("sample")
             )
-        
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -166,19 +166,19 @@ async def run_ingest(request: IngestRunRequest, dryRun: bool = False):
 async def analyze_metrics():
     """
     Analyze metrics from recent events.
-    
+
     Queries events from the last 48 hours, computes engineering metrics,
     and returns metrics along with the 50 most recent events.
     """
     try:
         # Query last 48 hours of events from database
         sql = """
-            SELECT * FROM events 
+            SELECT * FROM events
             WHERE ts >= NOW() - INTERVAL '48 hours'
             ORDER BY ts DESC
         """
         events = await fetch(sql)
-        
+
         # Convert database rows to list of dicts and handle datetime objects
         converted_events = []
         for event in events:
@@ -187,26 +187,26 @@ async def analyze_metrics():
                 event_dict = dict(event)
             else:
                 event_dict = event
-                
+
             # Convert datetime objects to ISO strings for JSON serialization
             if 'ts' in event_dict and hasattr(event_dict['ts'], 'isoformat'):
                 event_dict['ts'] = event_dict['ts'].isoformat()
-                
+
             converted_events.append(event_dict)
-        
+
         events = converted_events
-        
+
         # Compute 48h metrics
         metrics = compute_48h_metrics(events)
-        
+
         # Get 50 most recent events
         recent_events = filter_recent_events(events, limit=50)
-        
+
         return AnalyzeResponse(
             metrics=metrics,
             events=recent_events
         )
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
@@ -228,22 +228,22 @@ async def generate_report():
 async def get_public_report_endpoint(request: Request):
     """
     Get public report with latest metrics, feedback, and recent events.
-    
+
     This is a read-only endpoint with no authentication required.
     Rate limited to 5 requests per minute per IP.
-    
+
     Returns:
         Public report with sanitized data safe for public consumption
     """
     # Get client IP for rate limiting
     client_ip = request.client.host if request.client else "unknown"
-    
+
     # Apply rate limiting (5 requests per minute)
     is_allowed, rate_info = rate_limiter.is_allowed(client_ip, limit=5, window_seconds=60)
-    
+
     if not is_allowed:
         raise HTTPException(
-            status_code=429, 
+            status_code=429,
             detail="Rate limit exceeded. Maximum 5 requests per minute.",
             headers={
                 "X-RateLimit-Limit": str(rate_info["limit"]),
@@ -252,22 +252,22 @@ async def get_public_report_endpoint(request: Request):
                 "Retry-After": str(rate_info["window"])
             }
         )
-    
+
     try:
         # Generate public report
         report_data = await get_public_report()
-        
+
         # Add rate limit headers to successful responses
         response = PublicReportResponse(**report_data)
-        
+
         # Note: FastAPI doesn't support adding headers directly to response models,
         # but the rate limiting info is logged for monitoring
         return response
-        
+
     except Exception as e:
         raise HTTPException(
-            status_code=500, 
-            detail="Failed to generate public report"
+            status_code=500,
+            detail=f"Failed to generate public report: {str(e)}"
         )
 
 
