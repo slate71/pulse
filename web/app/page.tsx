@@ -1,130 +1,188 @@
-'use client'
+"use client";
 
-import { useQuery } from '@tanstack/react-query'
-import { Activity, BarChart3, Brain } from 'lucide-react'
-import axios from 'axios'
+import { useState, FormEvent } from "react";
+import Head from "next/head";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
+export default function Home() {
+  const [email, setEmail] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-async function fetchHealth() {
-  const response = await axios.get(`${API_BASE_URL}/health`)
-  return response.data
-}
+  const handleEmailSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
 
-async function fetchReport() {
-  const response = await axios.get(`${API_BASE_URL}/report`)
-  return response.data
-}
-
-export default function Dashboard() {
-  const { data: health, isLoading: healthLoading } = useQuery({
-    queryKey: ['health'],
-    queryFn: fetchHealth,
-  })
-
-  const { data: report, isLoading: reportLoading } = useQuery({
-    queryKey: ['report'],
-    queryFn: fetchReport,
-  })
+    // Simple form submission - replace with your preferred service
+    try {
+      // For now, just simulate submission
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      setSubmitted(true);
+      setEmail("");
+    } catch (error) {
+      console.error("Error submitting email:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center gap-2">
-        <Activity className="h-6 w-6" />
-        <h1 className="text-3xl font-bold">Engineering Radar</h1>
-        {health && (
-          <span className="ml-auto text-sm text-muted-foreground">
-            API Status: {healthLoading ? 'Loading...' : health.status}
-          </span>
-        )}
-      </div>
+    <>
+      <Head>
+        <title>Pulse - Never be surprised in standup again</title>
+        <meta
+          name="description"
+          content="Know what your team is working on before standup starts. Join the beta for $29/month."
+        />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="/favicon.ico" />
+      </Head>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* KPIs Panel */}
-        <div className="lg:col-span-1">
-          <div className="bg-card border rounded-lg p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <BarChart3 className="h-5 w-5" />
-              <h2 className="text-xl font-semibold">KPIs</h2>
-            </div>
-            {reportLoading ? (
-              <div className="space-y-4">
-                <div className="h-4 bg-muted rounded animate-pulse" />
-                <div className="h-4 bg-muted rounded animate-pulse" />
-                <div className="h-4 bg-muted rounded animate-pulse" />
+      <main className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+        {/* Header */}
+        <header className="container mx-auto px-6 py-8">
+          <div className="flex items-center justify-between">
+            <div className="text-2xl font-bold text-slate-800">Pulse</div>
+            <div className="text-sm text-slate-600">Coming Soon</div>
+          </div>
+        </header>
+
+        {/* Hero Section */}
+        <section className="container mx-auto px-6 py-16 text-center">
+          <h1 className="text-5xl md:text-6xl font-bold text-slate-900 mb-6 leading-tight">
+            Never be surprised in <br />
+            <span className="text-blue-600">standup</span> again
+          </h1>
+
+          <p className="text-xl text-slate-600 mb-12 max-w-2xl mx-auto leading-relaxed">
+            Know what your team is working on before the meeting starts. Get
+            real-time updates, track progress, and make standups actually
+            useful.
+          </p>
+
+          {/* Email Capture */}
+          <div className="max-w-md mx-auto mb-8">
+            {submitted ? (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-800">
+                ✨ Thanks! We'll keep you updated on our progress.
               </div>
             ) : (
-              <div className="space-y-4">
-                {/* TODO: Replace with real KPI data */}
-                <div>
-                  <p className="text-sm text-muted-foreground">Velocity</p>
-                  <p className="text-2xl font-bold">TODO</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Cycle Time</p>
-                  <p className="text-2xl font-bold">TODO</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Deployment Frequency</p>
-                  <p className="text-2xl font-bold">TODO</p>
-                </div>
-              </div>
+              <form onSubmit={handleEmailSubmit} className="flex gap-3">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  required
+                  className="flex-1 px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-6 py-3 bg-slate-800 text-white rounded-lg font-medium hover:bg-slate-700 transition-colors disabled:opacity-50"
+                >
+                  {loading ? "..." : "Notify Me"}
+                </button>
+              </form>
             )}
           </div>
-        </div>
 
-        {/* Event Stream Panel */}
-        <div className="lg:col-span-1">
-          <div className="bg-card border rounded-lg p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Activity className="h-5 w-5" />
-              <h2 className="text-xl font-semibold">Recent Activity</h2>
-            </div>
-            {reportLoading ? (
-              <div className="space-y-3">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="h-12 bg-muted rounded animate-pulse" />
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {/* TODO: Replace with real event stream */}
-                <p className="text-muted-foreground">No recent activity</p>
-                <p className="text-sm">Connect GitHub and Linear to see events</p>
-              </div>
-            )}
+          {/* Beta CTA */}
+          <div className="mb-16">
+            <a
+              href="https://buy.stripe.com/test_your_payment_link_here" // Replace with actual Stripe payment link
+              className="inline-flex items-center gap-2 px-8 py-4 bg-blue-600 text-white rounded-lg font-semibold text-lg hover:bg-blue-700 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all"
+            >
+              🚀 Join Beta - $29/month
+            </a>
+            <p className="text-sm text-slate-500 mt-3">
+              Early access • Cancel anytime • 30-day money back guarantee
+            </p>
           </div>
-        </div>
+        </section>
 
-        {/* AI Panel */}
-        <div className="lg:col-span-1">
-          <div className="bg-card border rounded-lg p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Brain className="h-5 w-5" />
-              <h2 className="text-xl font-semibold">AI Focus Actions</h2>
+        {/* Features Preview */}
+        <section className="container mx-auto px-6 py-16">
+          <div className="max-w-4xl mx-auto">
+            <h2 className="text-3xl font-bold text-slate-900 text-center mb-12">
+              What makes standups better?
+            </h2>
+
+            <div className="grid md:grid-cols-3 gap-8">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl">📊</span>
+                </div>
+                <h3 className="text-xl font-semibold text-slate-800 mb-2">
+                  Real-time Updates
+                </h3>
+                <p className="text-slate-600">
+                  See what everyone's working on throughout the day, not just
+                  during meetings.
+                </p>
+              </div>
+
+              <div className="text-center">
+                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl">⚡</span>
+                </div>
+                <h3 className="text-xl font-semibold text-slate-800 mb-2">
+                  Faster Standups
+                </h3>
+                <p className="text-slate-600">
+                  Come prepared with context. Spend time solving problems, not
+                  catching up.
+                </p>
+              </div>
+
+              <div className="text-center">
+                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl">🎯</span>
+                </div>
+                <h3 className="text-xl font-semibold text-slate-800 mb-2">
+                  Stay Aligned
+                </h3>
+                <p className="text-slate-600">
+                  Spot blockers early and keep everyone moving in the same
+                  direction.
+                </p>
+              </div>
             </div>
-            {reportLoading ? (
-              <div className="space-y-3">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="h-16 bg-muted rounded animate-pulse" />
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {report?.focus_actions?.map((action: string, index: number) => (
-                  <div key={index} className="p-3 bg-secondary rounded-md">
-                    <p className="text-sm">{action}</p>
-                  </div>
-                )) || (
-                  <p className="text-muted-foreground">
-                    Connect your tools to get AI-powered insights
-                  </p>
-                )}
-              </div>
-            )}
           </div>
-        </div>
-      </div>
-    </div>
-  )
+        </section>
+
+        {/* Social Proof / Testimonial Placeholder */}
+        <section className="container mx-auto px-6 py-16">
+          <div className="max-w-2xl mx-auto text-center bg-white rounded-2xl p-8 shadow-sm border border-slate-200">
+            <p className="text-lg text-slate-700 italic mb-4">
+              "Finally, a tool that makes our standups actually productive
+              instead of just status updates."
+            </p>
+            <div className="text-slate-600">
+              <span className="font-medium">Early Beta User</span>
+              <span className="mx-2">•</span>
+              <span>Engineering Manager</span>
+            </div>
+          </div>
+        </section>
+
+        {/* Footer */}
+        <footer className="container mx-auto px-6 py-12 border-t border-slate-200">
+          <div className="text-center text-slate-600">
+            <p className="mb-4">
+              Built for teams that ship fast and stay aligned.
+            </p>
+            <p className="text-sm">
+              Questions? Email us at{" "}
+              <a
+                href="mailto:hello@yourpulsedomain.com"
+                className="text-blue-600 hover:underline"
+              >
+                hello@yourpulsedomain.com
+              </a>
+            </p>
+          </div>
+        </footer>
+      </main>
+    </>
+  );
 }
