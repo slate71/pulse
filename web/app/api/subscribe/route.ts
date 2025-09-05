@@ -1,4 +1,5 @@
 import { Redis } from "@upstash/redis";
+import { Resend } from "resend";
 import { NextResponse } from "next/server";
 
 // Initialize Redis client
@@ -6,6 +7,9 @@ const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL!,
   token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 });
+
+// Initialize Resend client
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(request: Request) {
   try {
@@ -39,6 +43,25 @@ export async function POST(request: Request) {
 
     // Also add to a list for easy retrieval
     await redis.lpush("waitlist:emails", email);
+
+    // Send notification email
+    try {
+      await resend.emails.send({
+        from: "Pulse Waitlist <onboarding@resend.dev>", // Use resend.dev for now
+        to: process.env.NOTIFICATION_EMAIL || "your@email.com",
+        subject: "New Pulse waitlist signup",
+        html: `
+          <h2>New Pulse Waitlist Signup</h2>
+          <p><strong>Email:</strong> ${email}</p>
+          <p><strong>Time:</strong> ${timestamp}</p>
+          <hr>
+          <p>🎉 Another soul saved from engineering chaos! They're ready to turn their daily madness into three beautiful, actionable items.</p>
+        `,
+      });
+    } catch (emailError) {
+      console.error("Failed to send notification email:", emailError);
+      // Don't fail the signup if email fails
+    }
 
     return NextResponse.json(
       { message: "Successfully subscribed" },
