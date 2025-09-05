@@ -1,25 +1,39 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import React, { useState, FormEvent } from "react";
 import Head from "next/head";
 
 export default function Home() {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleEmailSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
+    setError("");
 
-    // Simple form submission - replace with your preferred service
     try {
-      // For now, just simulate submission
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      setSubmitted(true);
-      setEmail("");
+      const response = await fetch("/api/subscribe", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSubmitted(true);
+        setEmail("");
+      } else {
+        setError(data.error || "Something went wrong");
+      }
     } catch (error) {
       console.error("Error submitting email:", error);
+      setError("Failed to connect. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -28,10 +42,10 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>Pulse - Never be surprised in standup again</title>
+        <title>Pulse - Transform engineering chaos into daily actions</title>
         <meta
           name="description"
-          content="Know what your team is working on before standup starts. Join the beta for $29/month."
+          content="Transform engineering chaos into daily actions. Never miss what matters."
         />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
@@ -49,14 +63,14 @@ export default function Home() {
         {/* Hero Section */}
         <section className="container mx-auto px-6 py-16 text-center">
           <h1 className="text-5xl md:text-6xl font-bold text-slate-900 mb-6 leading-tight">
-            Never be surprised in <br />
-            <span className="text-blue-600">standup</span> again
+            Transform engineering chaos <br />
+            into <span className="text-blue-600">daily action</span>
           </h1>
 
           <p className="text-xl text-slate-600 mb-12 max-w-2xl mx-auto leading-relaxed">
-            Know what your team is working on before the meeting starts. Get
-            real-time updates, track progress, and make standups actually
-            useful.
+            Cut through the noise of PRs, tickets, and blockers. Get AI-powered
+            insights that tell you exactly what needs your attention today.
+            Never miss what matters.
           </p>
 
           {/* Email Capture */}
@@ -66,37 +80,29 @@ export default function Home() {
                 ✨ Thanks! We'll keep you updated on our progress.
               </div>
             ) : (
-              <form onSubmit={handleEmailSubmit} className="flex gap-3">
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
-                  required
-                  className="flex-1 px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-6 py-3 bg-slate-800 text-white rounded-lg font-medium hover:bg-slate-700 transition-colors disabled:opacity-50"
-                >
-                  {loading ? "..." : "Notify Me"}
-                </button>
-              </form>
+              <>
+                <form onSubmit={handleEmailSubmit} className="flex gap-3">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    required
+                    className="flex-1 px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-900"
+                  />
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="px-6 py-3 bg-slate-800 text-white rounded-lg font-medium hover:bg-slate-700 transition-colors disabled:opacity-50"
+                  >
+                    {loading ? "..." : "Notify Me"}
+                  </button>
+                </form>
+                {error && (
+                  <p className="mt-2 text-sm text-red-600">{error}</p>
+                )}
+              </>
             )}
-          </div>
-
-          {/* Beta CTA */}
-          <div className="mb-16">
-            <a
-              href="https://buy.stripe.com/test_your_payment_link_here" // Replace with actual Stripe payment link
-              className="inline-flex items-center gap-2 px-8 py-4 bg-blue-600 text-white rounded-lg font-semibold text-lg hover:bg-blue-700 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all"
-            >
-              🚀 Join Beta - $29/month
-            </a>
-            <p className="text-sm text-slate-500 mt-3">
-              Early access • Cancel anytime • 30-day money back guarantee
-            </p>
           </div>
         </section>
 
@@ -104,7 +110,7 @@ export default function Home() {
         <section className="container mx-auto px-6 py-16">
           <div className="max-w-4xl mx-auto">
             <h2 className="text-3xl font-bold text-slate-900 text-center mb-12">
-              What makes standups better?
+              From chaos to clarity in seconds
             </h2>
 
             <div className="grid md:grid-cols-3 gap-8">
@@ -113,11 +119,11 @@ export default function Home() {
                   <span className="text-2xl">📊</span>
                 </div>
                 <h3 className="text-xl font-semibold text-slate-800 mb-2">
-                  Real-time Updates
+                  AI-Powered Focus
                 </h3>
                 <p className="text-slate-600">
-                  See what everyone's working on throughout the day, not just
-                  during meetings.
+                  Analyzes PRs, tickets, and blockers to surface exactly what
+                  needs attention.
                 </p>
               </div>
 
@@ -126,11 +132,11 @@ export default function Home() {
                   <span className="text-2xl">⚡</span>
                 </div>
                 <h3 className="text-xl font-semibold text-slate-800 mb-2">
-                  Faster Standups
+                  Three Daily Actions
                 </h3>
                 <p className="text-slate-600">
-                  Come prepared with context. Spend time solving problems, not
-                  catching up.
+                  No more endless task lists. Just three critical actions to
+                  move your team forward.
                 </p>
               </div>
 
@@ -139,11 +145,11 @@ export default function Home() {
                   <span className="text-2xl">🎯</span>
                 </div>
                 <h3 className="text-xl font-semibold text-slate-800 mb-2">
-                  Stay Aligned
+                  Never Miss Critical Work
                 </h3>
                 <p className="text-slate-600">
-                  Spot blockers early and keep everyone moving in the same
-                  direction.
+                  Important PRs, blocked tickets, team dependencies - nothing
+                  falls through the cracks.
                 </p>
               </div>
             </div>
@@ -154,8 +160,8 @@ export default function Home() {
         <section className="container mx-auto px-6 py-16">
           <div className="max-w-2xl mx-auto text-center bg-white rounded-2xl p-8 shadow-sm border border-slate-200">
             <p className="text-lg text-slate-700 italic mb-4">
-              "Finally, a tool that makes our standups actually productive
-              instead of just status updates."
+              "Pulse turned our engineering chaos into clarity. We now know
+              exactly what to focus on every single day."
             </p>
             <div className="text-slate-600">
               <span className="font-medium">Early Beta User</span>
@@ -169,7 +175,8 @@ export default function Home() {
         <footer className="container mx-auto px-6 py-12 border-t border-slate-200">
           <div className="text-center text-slate-600">
             <p className="mb-4">
-              Built for teams that ship fast and stay aligned.
+              Built for engineering teams that refuse to let critical work slip
+              through the cracks.
             </p>
             <p className="text-sm">
               Questions? Email us at{" "}
