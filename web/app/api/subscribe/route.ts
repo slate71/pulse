@@ -45,12 +45,8 @@ export async function POST(request: Request) {
     await redis.lpush("waitlist:emails", email);
 
     // Send notification email
-    console.log("Attempting to send notification email...");
-    console.log("RESEND_API_KEY exists:", !!process.env.RESEND_API_KEY);
-    console.log("NOTIFICATION_EMAIL:", process.env.NOTIFICATION_EMAIL);
-    
     try {
-      const emailResult = await resend.emails.send({
+      await resend.emails.send({
         from: "Pulse Waitlist <onboarding@resend.dev>", // Use resend.dev for now
         to: process.env.NOTIFICATION_EMAIL || "your@email.com",
         subject: "New Pulse waitlist signup",
@@ -62,8 +58,6 @@ export async function POST(request: Request) {
           <p>🎉 Another soul saved from engineering chaos! They're ready to turn their daily madness into three beautiful, actionable items.</p>
         `,
       });
-      
-      console.log("Email sent successfully:", emailResult);
     } catch (emailError) {
       console.error("Failed to send notification email:", emailError);
       // Don't fail the signup if email fails
