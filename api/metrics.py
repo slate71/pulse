@@ -5,10 +5,11 @@ Provides functions to compute engineering metrics from events data.
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List
+from typing import Dict, List, Union
+from models.domain import MetricsData, Event
 
 
-def compute_48h_metrics(events: List[Dict]) -> Dict:
+def compute_48h_metrics(events: List[Dict]) -> MetricsData:
     """
     Compute metrics from events in the last 48 hours.
     
@@ -107,7 +108,13 @@ def compute_48h_metrics(events: List[Dict]) -> Dict:
                 metrics["tickets_blocked_now"] += 1
             # Note: ISSUE_UNBLOCKED would decrement, but we're not tracking that reliably yet
     
-    return metrics
+    return MetricsData(
+        prs_open_48h=int(metrics["prs_open_48h"]),
+        prs_merged_48h=int(metrics["prs_merged_48h"]),
+        avg_review_hours_48h=float(metrics["avg_review_hours_48h"]),
+        tickets_moved_48h=int(metrics["tickets_moved_48h"]),
+        tickets_blocked_now=int(metrics["tickets_blocked_now"])
+    )
 
 
 def filter_recent_events(events: List[Dict], limit: int = 50) -> List[Dict]:

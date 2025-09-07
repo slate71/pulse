@@ -2,32 +2,86 @@
 Pulse API - Main application module.
 
 AI-powered engineering radar API with priority recommendations.
+Enhanced with security hardening and production-ready features.
 """
 
-import os
+import logging
+import signal
+import asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from dependencies import API_TITLE, API_DESCRIPTION, API_VERSION, validate_environment
+from config import get_settings
+from middleware import (
+    SecurityHeadersMiddleware, 
+    LoggingMiddleware, 
+    RequestIDMiddleware,
+    RequestSizeMiddleware,
+    RequestTimeoutMiddleware
+)
 from routers import health, ingest, priority, report
+from db import close_pool
 
-# Validate environment on startup
-validate_environment()
+# Initialize settings and configure logging
+settings = get_settings()
+settings.configure_logging()
+settings.validate_configuration()
 
-# Create FastAPI application
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan handler for startup and shutdown."""
+    
+    # Startup
+    logger.info(f"Starting Pulse API v{settings.app.version}")
+    logger.info(f"Environment: {settings.app.environment.value}")
+    
+    try:
+        yield
+    finally:
+        # Shutdown
+        logger.info("Shutting down Pulse API")
+        
+        # Close database connections
+        await close_pool()
+        logger.info("Database connections closed")
+
+
+# Create FastAPI application with lifespan management
 app = FastAPI(
-    title=API_TITLE,
-    description=API_DESCRIPTION,
-    version=API_VERSION
+    title=settings.app.title,
+    description=settings.app.description,
+    version=settings.app.version,
+    debug=settings.app.debug,
+    lifespan=lifespan
 )
 
-# Configure CORS
+# Add security and monitoring middleware (order matters!)
+# Request ID should be first for proper logging context
+app.add_middleware(RequestIDMiddleware)
+
+# Logging middleware should be early to capture all requests
+app.add_middleware(
+    LoggingMiddleware, 
+    structured=settings.app.structured_logging,
+    log_bodies=settings.app.debug
+)
+
+# Security middleware
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestSizeMiddleware, max_size=settings.app.max_request_size)
+app.add_middleware(RequestTimeoutMiddleware, timeout=settings.app.request_timeout)
+
+# CORS configuration based on settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.security.cors_origins,
+    allow_credentials=settings.security.cors_credentials,
+    allow_methods=settings.security.cors_methods,
+    allow_headers=settings.security.cors_headers,
 )
 
 # Include routers
@@ -37,10 +91,29 @@ app.include_router(report.router)
 app.include_router(priority.router)
 
 
+def setup_signal_handlers():
+    """Setup graceful shutdown signal handlers."""
+    
+    def signal_handler(signum, frame):
+        logger.info(f"Received signal {signum}, initiating graceful shutdown")
+        # The lifespan handler will take care of cleanup
+    
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+
+
 if __name__ == "__main__":
     import uvicorn
-
-    host = os.getenv("API_HOST", "localhost")
-    port = int(os.getenv("API_PORT", 8000))
-
-    uvicorn.run(app, host=host, port=port, reload=True)
+    
+    setup_signal_handlers()
+    
+    logger.info(f"Starting server on {settings.app.host}:{settings.app.port}")
+    
+    uvicorn.run(
+        app, 
+        host=settings.app.host, 
+        port=settings.app.port,
+        reload=settings.app.is_development,
+        log_level=settings.app.log_level.value.lower(),
+        access_log=settings.app.debug
+    )

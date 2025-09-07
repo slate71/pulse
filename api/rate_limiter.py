@@ -4,8 +4,9 @@ Simple in-memory rate limiter for public endpoints.
 
 import time
 import logging
-from typing import Dict, Tuple, Any
+from typing import Dict, Tuple
 from collections import defaultdict
+from models.domain import RateLimitInfo, RateLimitStats
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ class InMemoryRateLimiter:
         self._cleanup_interval = 300  # Clean up old entries every 5 minutes
         self._last_cleanup = time.time()
     
-    def is_allowed(self, ip: str, limit: int = 5, window_seconds: int = 60) -> Tuple[bool, Dict[str, Any]]:
+    def is_allowed(self, ip: str, limit: int = 5, window_seconds: int = 60) -> Tuple[bool, RateLimitInfo]:
         """
         Check if request from IP is allowed within rate limit.
         
@@ -56,12 +57,12 @@ class InMemoryRateLimiter:
         current_requests = sum(count for timestamp, count in self._requests[ip])
         
         # Calculate rate limit info
-        rate_limit_info = {
-            "limit": limit,
-            "remaining": max(0, limit - current_requests),
-            "reset": int(current_time + window_seconds),
-            "window": window_seconds
-        }
+        rate_limit_info = RateLimitInfo(
+            limit=limit,
+            remaining=max(0, limit - current_requests),
+            reset=int(current_time + window_seconds),
+            window=window_seconds
+        )
         
         # Check if request is allowed
         if current_requests >= limit:
@@ -70,7 +71,7 @@ class InMemoryRateLimiter:
         
         # Add this request to the tracking
         self._requests[ip].append((current_time, 1))
-        rate_limit_info["remaining"] -= 1
+        rate_limit_info.remaining -= 1
         
         return True, rate_limit_info
     
@@ -96,7 +97,7 @@ class InMemoryRateLimiter:
         
         logger.debug(f"Rate limiter cleanup: removed {len(ips_to_remove)} inactive IPs")
     
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> RateLimitStats:
         """Get rate limiter statistics for debugging."""
         current_time = time.time()
         active_ips = 0
@@ -112,11 +113,11 @@ class InMemoryRateLimiter:
                     if timestamp > hour_ago
                 )
         
-        return {
-            "active_ips": active_ips,
-            "total_requests_last_hour": total_requests_last_hour,
-            "last_cleanup": self._last_cleanup
-        }
+        return RateLimitStats(
+            active_ips=active_ips,
+            total_requests_last_hour=total_requests_last_hour,
+            last_cleanup=self._last_cleanup
+        )
 
 
 # Global rate limiter instance

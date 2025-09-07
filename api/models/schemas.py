@@ -4,6 +4,10 @@ Pydantic models for API request/response schemas.
 
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
+from .domain import (
+    MetricsData, Event, JourneyState, PriorityRecommendation, 
+    StandardErrorResponse, ValidationErrorResponse
+)
 
 
 class HealthResponse(BaseModel):
@@ -38,8 +42,8 @@ class IngestRunResponse(BaseModel):
 
 
 class AnalyzeResponse(BaseModel):
-    metrics: Dict[str, Any]
-    events: List[Dict[str, Any]]
+    metrics: MetricsData
+    events: List[Event]
 
 
 class ReportResponse(BaseModel):
@@ -50,21 +54,13 @@ class ReportResponse(BaseModel):
 
 class PublicReportResponse(BaseModel):
     as_of: str
-    metrics: Dict[str, Any]
-    feedback: Optional[Dict[str, Any]]
-    recent_events: List[Dict[str, Any]]
+    metrics: MetricsData
+    feedback: Optional[Dict[str, Any]]  # Keep flexible for now as it's sanitized data
+    recent_events: List[Event]
 
 
-class PriorityRecommendationResponse(BaseModel):
-    generated_at: str
-    context_id: str
-    primary_action: Dict[str, Any]
-    alternatives: List[Dict[str, Any]]
-    context_summary: str
-    journey_alignment: str
-    momentum_insight: str
-    energy_match: str
-    debug_info: Dict[str, Any]
+# Use the domain model directly for priority recommendations
+PriorityRecommendationResponse = PriorityRecommendation
 
 
 class PriorityFeedbackRequest(BaseModel):
@@ -76,6 +72,7 @@ class PriorityFeedbackRequest(BaseModel):
 
 
 class JourneyStateResponse(BaseModel):
+    """Journey state response with flexible typing for backward compatibility."""
     id: str
     desired_state: Dict[str, Any]
     current_state: Dict[str, Any]
