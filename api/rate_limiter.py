@@ -4,7 +4,7 @@ Simple in-memory rate limiter for public endpoints.
 
 import time
 import logging
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Any
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ class InMemoryRateLimiter:
         self._cleanup_interval = 300  # Clean up old entries every 5 minutes
         self._last_cleanup = time.time()
     
-    def is_allowed(self, ip: str, limit: int = 5, window_seconds: int = 60) -> Tuple[bool, Dict[str, any]]:
+    def is_allowed(self, ip: str, limit: int = 5, window_seconds: int = 60) -> Tuple[bool, Dict[str, Any]]:
         """
         Check if request from IP is allowed within rate limit.
         
@@ -96,7 +96,7 @@ class InMemoryRateLimiter:
         
         logger.debug(f"Rate limiter cleanup: removed {len(ips_to_remove)} inactive IPs")
     
-    def get_stats(self) -> Dict[str, any]:
+    def get_stats(self) -> Dict[str, Any]:
         """Get rate limiter statistics for debugging."""
         current_time = time.time()
         active_ips = 0
