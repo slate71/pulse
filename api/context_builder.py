@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Any
 
 from db import fetch, fetchone
 from metrics import compute_48h_metrics
+from models.domain import MetricsData
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ class ContextBuilder:
             logger.error(f"Failed to build context: {e}")
             return self._get_fallback_context()
 
-    async def _get_48h_metrics(self) -> Dict[str, Any]:
+    async def _get_48h_metrics(self) -> MetricsData:
         """Get 48h metrics using existing logic from /analyze endpoint."""
         try:
             # Reuse existing logic from main.py /analyze endpoint
@@ -92,13 +93,13 @@ class ContextBuilder:
 
         except Exception as e:
             logger.error(f"Failed to get 48h metrics: {e}")
-            return {
-                "prs_open_48h": 0,
-                "prs_merged_48h": 0,
-                "avg_review_hours_48h": 0.0,
-                "tickets_moved_48h": 0,
-                "tickets_blocked_now": 0
-            }
+            return MetricsData(
+                prs_open_48h=0,
+                prs_merged_48h=0,
+                avg_review_hours_48h=0.0,
+                tickets_moved_48h=0,
+                tickets_blocked_now=0
+            )
 
     async def _get_recent_events(self, limit: int = 20) -> List[Dict[str, Any]]:
         """Get recent events for context."""

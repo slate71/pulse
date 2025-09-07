@@ -99,10 +99,10 @@ async def get_public_report_endpoint(request: Request):
             status_code=429,
             detail="Rate limit exceeded. Maximum 5 requests per minute.",
             headers={
-                "X-RateLimit-Limit": str(rate_info["limit"]),
-                "X-RateLimit-Remaining": str(rate_info["remaining"]),
-                "X-RateLimit-Reset": str(rate_info["reset"]),
-                "Retry-After": str(rate_info["window"])
+                "X-RateLimit-Limit": str(rate_info.limit),
+                "X-RateLimit-Remaining": str(rate_info.remaining),
+                "X-RateLimit-Reset": str(rate_info.reset),
+                "Retry-After": str(rate_info.window)
             }
         )
 
