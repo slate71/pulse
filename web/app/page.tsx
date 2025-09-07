@@ -56,7 +56,15 @@ export default function Home() {
         <header className="container mx-auto px-6 py-8">
           <div className="flex items-center justify-between">
             <div className="text-2xl font-bold text-slate-800">Pulse</div>
-            <div className="text-sm text-slate-600">Coming Soon</div>
+            <div className="flex items-center space-x-4">
+              <a 
+                href="/priority" 
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+              >
+                Try Priority Engine →
+              </a>
+              <div className="text-sm text-slate-600">Beta</div>
+            </div>
           </div>
         </header>
 

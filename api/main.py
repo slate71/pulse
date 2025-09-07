@@ -3,15 +3,33 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import os
+import json
+import logging
 from dotenv import load_dotenv
-from db import health_check, fetch
+from db import health_check, fetch, fetchone
 from github_ingest import ingest_github_events
 from linear_ingest import ingest_linear
 from metrics import compute_48h_metrics, filter_recent_events
 from report import get_public_report
 from rate_limiter import rate_limiter
+from priority_engine import PriorityEngine
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+
+def parse_jsonb_field(field_value: Any) -> Dict[str, Any]:
+    """Helper to parse JSONB fields that may come as strings from asyncpg."""
+    if isinstance(field_value, str):
+        try:
+            return json.loads(field_value)
+        except json.JSONDecodeError:
+            return {}
+    elif isinstance(field_value, dict):
+        return field_value
+    else:
+        return {}
 
 app = FastAPI(
     title="Pulse API",
@@ -75,6 +93,35 @@ class PublicReportResponse(BaseModel):
     metrics: Dict[str, Any]
     feedback: Optional[Dict[str, Any]]
     recent_events: List[Dict[str, Any]]
+
+
+class PriorityRecommendationResponse(BaseModel):
+    generated_at: str
+    context_id: str
+    primary_action: Dict[str, Any]
+    alternatives: List[Dict[str, Any]]
+    context_summary: str
+    journey_alignment: str
+    momentum_insight: str
+    energy_match: str
+    debug_info: Dict[str, Any]
+
+
+class PriorityFeedbackRequest(BaseModel):
+    recommendation_id: str
+    action_taken: Optional[str] = None
+    outcome: Optional[str] = None
+    feedback_score: Optional[int] = None
+    time_to_complete_minutes: Optional[int] = None
+
+
+class JourneyStateResponse(BaseModel):
+    id: str
+    desired_state: Dict[str, Any]
+    current_state: Dict[str, Any]
+    preferences: Dict[str, Any]
+    created_at: str
+    updated_at: str
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -158,8 +205,13 @@ async def run_ingest(request: IngestRunRequest, dryRun: bool = False):
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=f"External service unavailable: {str(e)}")
+    except TimeoutError as e:
+        raise HTTPException(status_code=504, detail=f"Request timeout: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ingest failed: {str(e)}")
+        logger.error(f"Unexpected error in ingest: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error during ingestion")
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)
@@ -208,7 +260,8 @@ async def analyze_metrics():
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        logger.error(f"Unexpected error in analyze: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error during analysis")
 
 
 @app.get("/report", response_model=ReportResponse)
@@ -269,6 +322,167 @@ async def get_public_report_endpoint(request: Request):
             status_code=500,
             detail=f"Failed to generate public report: {str(e)}"
         )
+
+
+@app.post("/priority/generate", response_model=PriorityRecommendationResponse)
+async def generate_priority_recommendation(journey_id: Optional[str] = None):
+    """
+    Generate AI-powered priority recommendation based on current context.
+    
+    Analyzes current activity, issues, journey state, and time context to
+    recommend the optimal next action with detailed reasoning.
+    """
+    try:
+        priority_engine = PriorityEngine()
+        recommendation = await priority_engine.generate_recommendation(journey_id)
+        
+        # Store recommendation for learning
+        await _store_recommendation(recommendation, journey_id)
+        
+        return PriorityRecommendationResponse(**recommendation)
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate priority recommendation: {str(e)}"
+        )
+
+
+@app.post("/priority/feedback")
+async def record_priority_feedback(feedback: PriorityFeedbackRequest):
+    """
+    Record feedback on a priority recommendation for learning.
+    
+    Tracks what action was actually taken, outcome, and user satisfaction
+    to improve future recommendations.
+    """
+    try:
+        # Convert time to PostgreSQL interval if provided
+        time_interval = None
+        if feedback.time_to_complete_minutes:
+            time_interval = f"{feedback.time_to_complete_minutes} minutes"
+        
+        # Update recommendation with feedback
+        sql = """
+            UPDATE priority_recommendations 
+            SET 
+                action_taken = %s,
+                outcome = %s,
+                feedback_score = %s,
+                time_to_complete = %s::interval,
+                completed_at = NOW()
+            WHERE context_snapshot->>'context_id' = %s
+            RETURNING id
+        """
+        
+        result = await fetchone(sql, (
+            feedback.action_taken,
+            feedback.outcome,
+            feedback.feedback_score,
+            time_interval,
+            feedback.recommendation_id
+        ))
+        
+        if not result:
+            raise HTTPException(status_code=404, detail="Recommendation not found")
+        
+        return {"message": "Feedback recorded successfully", "recommendation_id": str(result.get("id"))}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to record feedback: {str(e)}"
+        )
+
+
+@app.get("/journey/state", response_model=JourneyStateResponse)
+async def get_journey_state(journey_id: Optional[str] = None):
+    """
+    Get current journey state and progress.
+    
+    Returns user's desired state, current status, and preferences
+    for context-aware priority recommendations.
+    """
+    try:
+        if journey_id:
+            sql = "SELECT * FROM user_journey WHERE id = %s"
+            journey = await fetchone(sql, (journey_id,))
+        else:
+            sql = "SELECT * FROM user_journey WHERE is_active = true ORDER BY created_at DESC LIMIT 1"
+            journey = await fetchone(sql)
+        
+        if not journey:
+            raise HTTPException(status_code=404, detail="Journey not found")
+        
+        # Parse JSONB fields that come as strings from asyncpg
+        desired_state = parse_jsonb_field(journey.get("desired_state", {}))
+        current_state = parse_jsonb_field(journey.get("current_state", {}))
+        preferences = parse_jsonb_field(journey.get("preferences", {}))
+        
+        # Handle datetime fields safely
+        created_at = journey.get("created_at")
+        updated_at = journey.get("updated_at")
+        
+        return JourneyStateResponse(
+            id=str(journey.get("id")),
+            desired_state=desired_state,
+            current_state=current_state,
+            preferences=preferences,
+            created_at=created_at.isoformat() if created_at and hasattr(created_at, 'isoformat') else str(created_at or ""),
+            updated_at=updated_at.isoformat() if updated_at and hasattr(updated_at, 'isoformat') else str(updated_at or "")
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get journey state: {str(e)}"
+        )
+
+
+async def _store_recommendation(recommendation: Dict[str, Any], journey_id: Optional[str] = None):
+    """Store recommendation in database for learning."""
+    try:
+        # Get journey ID if not provided
+        if not journey_id:
+            sql = "SELECT id FROM user_journey WHERE is_active = true ORDER BY created_at DESC LIMIT 1"
+            journey = await fetchone(sql)
+            journey_id = str(journey.get("id")) if journey else None
+        
+        # Store recommendation with full context
+        sql = """
+            INSERT INTO priority_recommendations (
+                journey_id, context_snapshot, recommendations
+            ) VALUES (%s, %s, %s)
+            RETURNING id
+        """
+        
+        context_snapshot = {
+            "context_id": recommendation.get("context_id"),
+            "generated_at": recommendation.get("generated_at"),
+            "debug_info": recommendation.get("debug_info", {})
+        }
+        
+        recommendations_data = {
+            "primary_action": recommendation.get("primary_action"),
+            "alternatives": recommendation.get("alternatives"),
+            "context_summary": recommendation.get("context_summary"),
+            "journey_alignment": recommendation.get("journey_alignment"),
+            "momentum_insight": recommendation.get("momentum_insight"),
+            "energy_match": recommendation.get("energy_match")
+        }
+        
+        result = await fetchone(sql, (journey_id, context_snapshot, recommendations_data))
+        return str(result.get("id")) if result else None
+        
+    except Exception as e:
+        # Log error but don't fail the main request
+        import logging
+        logging.error(f"Failed to store recommendation: {e}")
+        return None
 
 
 if __name__ == "__main__":

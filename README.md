@@ -1,32 +1,52 @@
-# Pulse
+# Pulse - AI Priority Engine
 
-AI-powered engineering radar that connects to GitHub and Linear, ingests activity, computes execution metrics, and uses a tightly scoped LLM prompt to produce 3 grounded focus actions daily.
+An engineering metrics dashboard with AI-powered priority recommendations.
 
-## Description
+## Features
+- **AI Priority Engine**: Context analysis from GitHub/Linear activity with multi-factor scoring
+- **Data Sources**: Pull requests, commits, issue tracking, 48-hour rolling metrics
+- **Containerized Development**: Docker/Podman setup with modern tooling
 
-Pulse analyzes engineering team activity from GitHub and Linear to provide data-driven insights and AI-generated focus recommendations. It ingests development events, computes execution metrics, and generates daily actionable insights to help teams improve their development velocity and focus.
+## Tech Stack
+- **Backend**: FastAPI, PostgreSQL, Redis, OpenAI integration
+- **Frontend**: Next.js 15, TypeScript, TailwindCSS
+- **Infrastructure**: Multi-stage Docker builds, `just` task runner
 
-## Quick Start
+## Setup
 
+### Prerequisites
+- Podman or Docker
+- `just` task runner (`brew install just`)
+
+### Quick Start
 ```bash
-# Set up environment
+git clone <repository>
+cd pulse
 cp .env.example .env
-# Edit .env with your API keys and configuration
-
-# Start development servers
-make dev-api    # Start FastAPI backend (port 8000)
-make dev-web    # Start Next.js frontend (port 3000)
-
-# Set up database
-make db-migrate # Run database migrations
+just dev              # Start development stack
+just db-migrate       # Apply database migrations
 ```
 
-## Architecture
+**Access:**
+- Frontend: http://localhost:3000
+- API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
 
-- **api/** - FastAPI backend with data ingestion, analysis, and reporting endpoints
-- **web/** - Next.js frontend with TanStack Query for data fetching
-- **db/** - PostgreSQL migrations for events, metrics, and feedback storage
+### Commands
+```bash
+just dev       # Start all services
+just stop      # Stop all services  
+just logs      # View logs
+just db-shell  # Database shell
+just clean     # Clean up containers
+```
 
-## Development
+## API Endpoints
+- `POST /priority/generate` - AI priority recommendations
+- `POST /ingest/run` - GitHub/Linear data ingestion
+- `GET /health` - System health check
 
-Requires Python 3.11+, Node.js 18+, and PostgreSQL 14+.
+## Database Schema
+- `events` - GitHub/Linear activity events
+- `user_journey` - User state and preferences  
+- `priority_recommendations` - AI recommendations and feedback
