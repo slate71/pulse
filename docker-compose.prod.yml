@@ -1,0 +1,235 @@
+version: '3.8'
+
+# Pulse Production Environment - Staff Engineer Setup
+# Production-optimized with security, monitoring, and scaling
+
+services:
+  # Production Database with replication
+  db:
+    image: postgres:15-alpine
+    container_name: pulse-db-prod
+    environment:
+      POSTGRES_DB: pulse
+      POSTGRES_USER: ${DB_USER:-pulse_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Database password required}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-pulse_user} -d pulse"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - pulse-backend
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+
+  # Production API with multiple workers
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+      target: production
+    container_name: pulse-api-prod
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-pulse_user}:${DB_PASSWORD:?}@db:5432/pulse
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - GITHUB_TOKEN=${GITHUB_TOKEN:?GitHub token required}
+      - LINEAR_API_KEY=${LINEAR_API_KEY:?Linear API key required}
+      - LINEAR_TEAM_ID=${LINEAR_TEAM_ID:?Linear team ID required}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:?OpenAI API key required}
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:?Secret key required}
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - pulse-frontend
+      - pulse-backend
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.cache
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
+  # Production Web (Next.js)
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      target: production
+    container_name: pulse-web-prod
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_BASE_URL=https://${DOMAIN}/api
+      - NEXT_TELEMETRY_DISABLED=1
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - pulse-frontend
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.next/cache
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+
+  # Redis for caching and sessions
+  redis:
+    image: redis:7-alpine
+    container_name: pulse-redis-prod
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?Redis password required}
+    volumes:
+      - redis_prod_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - pulse-backend
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  # Production Nginx with SSL
+  nginx:
+    image: nginx:alpine
+    container_name: pulse-nginx-prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx/logs:/var/log/nginx
+    depends_on:
+      - api
+      - web
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - pulse-frontend
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  # Prometheus monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: pulse-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.external-url=http://localhost:9090'
+    networks:
+      - pulse-monitoring
+    restart: unless-stopped
+
+  # Grafana dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: pulse-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:?Grafana password required}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+    networks:
+      - pulse-monitoring
+    restart: unless-stopped
+
+  # Log aggregation
+  loki:
+    image: grafana/loki:latest
+    container_name: pulse-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    networks:
+      - pulse-monitoring
+    restart: unless-stopped
+
+volumes:
+  postgres_prod_data:
+    driver: local
+  redis_prod_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  loki_data:
+    driver: local
+
+networks:
+  pulse-frontend:
+    driver: bridge
+  pulse-backend:
+    driver: bridge
+  pulse-monitoring:
+    driver: bridge

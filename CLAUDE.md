@@ -4,50 +4,65 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Pulse is an AI-powered engineering radar that ingests activity from GitHub and Linear, computes execution metrics, and generates daily focus actions. It consists of a FastAPI backend that processes events and a Next.js frontend for visualization.
+Pulse is an AI-powered engineering radar with a context-aware Priority Engine that ingests activity from GitHub and Linear, computes execution metrics, and generates intelligent priority recommendations. Built with staff-level engineering practices including containerization, modern tooling, and AI integration.
 
-## Development Commands
+## Development Commands (Containerized)
 
-### Setup and Dependencies
+### Setup and Environment
 ```bash
-make setup              # Install all dependencies (Python + Node.js)
-make install-api        # Install Python dependencies only
-make install-web        # Install Node.js dependencies only
-```
-
-### Development Servers
-```bash
-make dev-api           # Start FastAPI backend on port 8000
-make dev-web           # Start Next.js frontend on port 3000
+just setup             # Build containerized development environment
+just dev               # Start full development stack (detached)
+just stop              # Stop all services
+just clean             # Clean up containers and volumes
 ```
 
 ### Database Operations
 ```bash
-make db-migrate        # Apply all SQL migrations from db/migrations/
-make db-check          # Test database connectivity
+just db-migrate        # Apply all SQL migrations from db/migrations/
+just db-shell          # Open PostgreSQL shell
+```
+
+### Development Tools
+```bash
+just logs              # View logs from all services
+just logs api          # View logs from specific service
+just shell api         # Shell into API container
+just shell web         # Shell into Web container
 ```
 
 ### Testing
 ```bash
-cd api && python -m pytest                    # Run all tests
-cd api && python -m pytest tests/test_*.py    # Run specific test file
-cd api && python -m pytest -v                 # Verbose test output
-cd web && npm run lint                         # Frontend linting
+just shell api         # Enter API container
+pytest                 # Run all tests inside container
+pytest tests/test_*.py  # Run specific test file
+pytest -v              # Verbose test output
 ```
 
-## Architecture Overview
+## Architecture Overview (Staff-Level Containerized)
+
+### Container Services
+- **API**: FastAPI backend (Python 3.12) with hot reload
+- **Web**: Next.js 15 frontend with TypeScript
+- **Database**: PostgreSQL 15 with persistent volumes
+- **Cache**: Redis 7 for performance optimization
+- **Multi-stage builds**: Optimized for dev/prod deployment
 
 ### Database Schema (PostgreSQL)
 - **events**: Central event store with unique constraint `(source, ref_id, type, ts)` for idempotency
 - **metrics_daily**: Computed daily metrics (PRs, review times, ticket movement)  
 - **feedback**: AI model feedback for learning and improvement
 - **ingest_cursors**: Key-value store for tracking incremental ingestion cursors
+- **user_journey**: Journey state tracking for context-aware recommendations
+- **priority_recommendations**: AI recommendation storage with feedback learning
+- **context_cache**: Performance optimization for context building
 
-### API Structure (`api/`)
-- **main.py**: FastAPI application with CORS, endpoints: `/health`, `/ingest/run`, `/analyze`, `/report`
-- **db.py**: Async database layer using asyncpg with connection pooling and utility functions
-- **github_ingest.py**: GitHub API client with event normalization (PullRequestEvent_*, PushEvent, etc.)
-- **linear_ingest.py**: Linear GraphQL client with issue-to-event normalization (ISSUE_CREATED, ISSUE_STATE_CHANGED, etc.)
+### AI Priority Engine (`api/`)
+- **main.py**: FastAPI with priority endpoints: `/priority/generate`, `/priority/feedback`, `/journey/state`
+- **priority_engine.py**: Core AI recommendation system with multi-factor scoring
+- **context_builder.py**: Context aggregation from multiple data sources (GitHub, Linear, metrics)
+- **db.py**: Async database layer using asyncpg with connection pooling
+- **github_ingest.py**: GitHub API client with event normalization
+- **linear_ingest.py**: Linear GraphQL client with issue-to-event normalization  
 - **metrics.py**: Pure functions for computing 48h metrics from events
 
 ### Event Ingestion Flow
@@ -64,26 +79,40 @@ cd web && npm run lint                         # Frontend linting
 - **POST `/ingest/run`**: Accepts `{"github": {...}}` or `{"linear": true}`, supports `?dryRun=true`
 - **POST `/analyze`**: Queries 48h events, computes metrics, returns `{metrics, events}`
 - **GET `/health`**: Database connectivity and system status
+- **POST `/priority/generate`**: AI-powered priority recommendations with context analysis
+- **POST `/priority/feedback`**: Record feedback on recommendations for learning
+- **GET `/journey/state`**: Get current user journey state and progress
+- **GET `/report/public`**: Public report with rate limiting
+
+### AI Priority Engine Features
+- **Context-Aware Analysis**: Multi-source data aggregation (GitHub, Linear, metrics, journey state)
+- **Multi-Factor Scoring**: Urgency, impact, momentum, energy alignment scoring
+- **OpenAI Integration**: Intelligent reasoning with fallback logic
+- **Learning System**: Feedback collection for recommendation improvement
+- **Journey Tracking**: User state management for personalized recommendations
 
 ### Configuration (Environment Variables)
 ```bash
 DATABASE_URL=postgresql://...
 GITHUB_TOKEN=ghp_...              # For GitHub API access
-LINEAR_API_KEY=lin_...            # For Linear GraphQL API
+LINEAR_API_KEY=lin_...            # For Linear GraphQL API  
 LINEAR_TEAM_ID=...                # Team scope for Linear ingestion
+OPENAI_API_KEY=sk-...             # Optional: For enhanced AI reasoning
 ```
 
 ### Frontend (`web/`)
-- **Next.js 14** with TypeScript, TailwindCSS, TanStack Query
-- **Query client**: Configured with React Query for API data fetching
+- **Next.js 15** with TypeScript, TailwindCSS, TanStack Query
+- **Priority Engine UI**: Real-time recommendations with reasoning display
+- **Journey Progress**: Visualization of user journey and goal tracking
 - **Components**: Located in `app/` directory following App Router structure
 
 ## Development Patterns
 
 ### Database Migrations
-- Sequential numbered files in `db/migrations/` (e.g., `0001_init.sql`, `0002_ingest_cursors.sql`)
-- Apply with `make db-migrate` which runs all `.sql` files in order
-- Use `psql $DATABASE_URL -f migration.sql` for individual migrations
+- Sequential numbered files in `db/migrations/` (e.g., `0001_init.sql`, `0002_ingest_cursors.sql`, `0003_journey_tracking.sql`)
+- Apply with `just db-migrate` which runs all migration files in order
+- Add new migrations manually to justfile for explicit control
+- Use `just db-shell` for direct database access
 
 ### Event Normalization
 - Each ingestion module (`github_ingest.py`, `linear_ingest.py`) has a `normalize_*()` function
