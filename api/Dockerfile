@@ -1,4 +1,4 @@
-# Multi-stage Dockerfile for Pulse API - Staff Engineer Setup
+# Multi-stage Dockerfile for Pulse API
 # Optimized for both development and production
 
 # Base stage - common dependencies
@@ -67,7 +67,7 @@ COPY db/ ./db/
 # Set ownership
 RUN chown -R appuser:appuser /app
 
-# Switch to non-root user  
+# Switch to non-root user
 USER appuser
 
 # Expose port
@@ -89,7 +89,7 @@ COPY tests/ ./tests/
 # Run tests
 RUN python -m pytest tests/ -v --cov=. --cov-report=term-missing
 
-# Linting stage  
+# Linting stage
 FROM development as linting
 
 # Run linting

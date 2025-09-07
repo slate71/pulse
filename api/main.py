@@ -421,13 +421,17 @@ async def get_journey_state(journey_id: Optional[str] = None):
         current_state = parse_jsonb_field(journey.get("current_state", {}))
         preferences = parse_jsonb_field(journey.get("preferences", {}))
         
+        # Handle datetime fields safely
+        created_at = journey.get("created_at")
+        updated_at = journey.get("updated_at")
+        
         return JourneyStateResponse(
             id=str(journey.get("id")),
             desired_state=desired_state,
             current_state=current_state,
             preferences=preferences,
-            created_at=journey.get("created_at").isoformat() if hasattr(journey.get("created_at"), 'isoformat') else str(journey.get("created_at")),
-            updated_at=journey.get("updated_at").isoformat() if hasattr(journey.get("updated_at"), 'isoformat') else str(journey.get("updated_at"))
+            created_at=created_at.isoformat() if created_at and hasattr(created_at, 'isoformat') else str(created_at or ""),
+            updated_at=updated_at.isoformat() if updated_at and hasattr(updated_at, 'isoformat') else str(updated_at or "")
         )
         
     except HTTPException:
