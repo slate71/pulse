@@ -143,7 +143,7 @@ def _sanitize_feedback(feedback_data: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Sanitized feedback data safe for public consumption
     """
-    sanitized = {}
+    sanitized: Dict[str, Any] = {}
     
     # Extract summary
     if "summary" in feedback_data and isinstance(feedback_data["summary"], str):
@@ -217,7 +217,7 @@ async def _get_recent_events_public() -> List[Dict[str, Any]]:
         for event in events:
             # Convert timestamp to ISO string if needed
             ts = event.get("ts")
-            if hasattr(ts, "isoformat"):
+            if ts is not None and hasattr(ts, "isoformat"):
                 ts = ts.isoformat()
             
             # Sanitize event data - remove any potential sensitive info
@@ -248,13 +248,13 @@ def _sanitize_actor(actor: Optional[str]) -> Optional[str]:
     
     # Remove any potential sensitive prefixes/suffixes
     # Keep basic GitHub/Linear usernames but strip anything that looks like internal IDs
-    sanitized = actor.strip()
+    sanitized_actor = actor.strip()
     
     # Basic validation - should look like a reasonable username
-    if len(sanitized) > 50 or len(sanitized) < 1:
+    if len(sanitized_actor) > 50 or len(sanitized_actor) < 1:
         return None
         
-    return sanitized
+    return sanitized_actor
 
 
 def _sanitize_event_type(event_type: Optional[str]) -> Optional[str]:
@@ -284,11 +284,11 @@ def _sanitize_title(title: Optional[str]) -> Optional[str]:
         return None
     
     # Truncate very long titles and strip whitespace
-    sanitized = title.strip()
-    if len(sanitized) > 200:
-        sanitized = sanitized[:197] + "..."
+    sanitized_title = title.strip()
+    if len(sanitized_title) > 200:
+        sanitized_title = sanitized_title[:197] + "..."
     
-    return sanitized if sanitized else None
+    return sanitized_title if sanitized_title else None
 
 
 def _sanitize_url(url: Optional[str]) -> Optional[str]:
