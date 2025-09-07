@@ -138,6 +138,10 @@ class ExternalAPISettings(BaseSettings):
     openai_timeout: int = Field(60, env="OPENAI_TIMEOUT", description="OpenAI API timeout in seconds")
     openai_model: str = Field("gpt-4", env="OPENAI_MODEL", description="OpenAI model to use")
     
+    # Redis Cache
+    redis_url: Optional[str] = Field(None, env="REDIS_URL", description="Redis connection URL")
+    redis_timeout: int = Field(5, env="REDIS_TIMEOUT", description="Redis timeout in seconds")
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

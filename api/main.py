@@ -20,7 +20,16 @@ from middleware import (
     RequestSizeMiddleware,
     RequestTimeoutMiddleware
 )
-from routers import health, ingest, priority, report
+from monitoring import (
+    setup_metrics,
+    setup_tracing,
+    setup_profiling,
+    MetricsMiddleware,
+    TracingMiddleware,
+    ProfilerMiddleware
+)
+from cache import setup_cache, start_memory_cache_cleanup
+from routers import health, ingest, priority, report, monitoring
 from db import close_pool
 
 # Initialize settings and configure logging
@@ -39,6 +48,17 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting Pulse API v{settings.app.version}")
     logger.info(f"Environment: {settings.app.environment.value}")
     
+    # Setup monitoring and observability
+    setup_metrics(settings)
+    setup_tracing("pulse-api")
+    setup_profiling(enabled=settings.app.debug)
+    
+    # Setup caching
+    await setup_cache()
+    start_memory_cache_cleanup()
+    
+    logger.info("Monitoring and caching systems initialized")
+    
     try:
         yield
     finally:
@@ -47,7 +67,18 @@ async def lifespan(app: FastAPI):
         
         # Close database connections
         await close_pool()
-        logger.info("Database connections closed")
+        
+        # Stop cache cleanup
+        from cache.memory_cache import stop_memory_cache_cleanup
+        stop_memory_cache_cleanup()
+        
+        # Close cache connections
+        from cache import get_cache_client
+        cache_client = get_cache_client()
+        if cache_client:
+            await cache_client.disconnect()
+        
+        logger.info("All connections closed and cleanup completed")
 
 
 # Create FastAPI application with lifespan management
@@ -59,9 +90,18 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Add security and monitoring middleware (order matters!)
+# Add monitoring and security middleware (order matters!)
 # Request ID should be first for proper logging context
 app.add_middleware(RequestIDMiddleware)
+
+# Tracing middleware should be early to capture full request lifecycle
+app.add_middleware(TracingMiddleware)
+
+# Metrics middleware for monitoring
+app.add_middleware(MetricsMiddleware)
+
+# Profiling middleware (only active when profiling is enabled)
+app.add_middleware(ProfilerMiddleware, profile_slow_requests=True, slow_threshold=1.0)
 
 # Logging middleware should be early to capture all requests
 app.add_middleware(
@@ -86,6 +126,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(health.router)
+app.include_router(monitoring.router)
 app.include_router(ingest.router)
 app.include_router(report.router)
 app.include_router(priority.router)
